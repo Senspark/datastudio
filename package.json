@@ -1,0 +1,26 @@
+{
+	"name": "nodejs-server",
+	"version": "1.0.0",
+	"description": "NodeJS Server Simple",
+	"main": "Server.js",
+	"scripts": {},
+	"keywords": [
+		"NodeJS",
+		"NodeJS",
+		"Server"
+	],
+	"author": "linhtlq@gmail.com",
+	"license": "ISC",
+	"dependencies": {
+		"async-lock": "^1.1.4",
+		"blob": "0.0.5",
+		"blob-to-buffer": "^1.2.8",
+		"csvtojson": "^2.0.8",
+		"eslint": "^5.15.2",
+		"lzutf8": "^0.5.5",
+		"node-fetch": "^2.3.0",
+		"requirejs": "^2.3.6",
+		"sleep": "^6.0.0"
+	},
+	"devDependencies": {}
+}
