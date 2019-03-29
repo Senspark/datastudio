@@ -1,170 +1,126 @@
-var http = require('http');
-const EE = require('../EE')
-const ee = new EE();
-const hostName = '127.0.0.1';
-const config = require('../config/config');
-const port = 3000;
 const AsyncLock = require('async-lock');
-var LOCK_DURATION = 60 * 1000;
-var lock = new AsyncLock({
-    timeout: LOCK_DURATION
-});
+const EE = require('../EE');
 
-var LOCK_DURATION = 60 * 1000;
-var DIMENSION_APPLICATION = 'application';
-var DIMENSION_PLACEMENT = 'placement';
-var DIMENSION_DATE = 'date';
-var DIMENSION_COUNTRY = 'country_iso_code';
-var _sessionId = ee.getSessionId();
+const CACHE_DURATION = 6 * 60 * 60;
+const LOCK_DURATION = 60 * 1000;
+
+const DIMENSION_APPLICATION = 'application';
+const DIMENSION_PLACEMENT = 'placement';
+const DIMENSION_DATE = 'date';
+const DIMENSION_COUNTRY = 'country_iso_code';
 
 class Vungle {
-    mapQuery(name) {
-        if (name == DIMENSION_COUNTRY) {
-            return 'country';
-        }
-
-        return name;
+  static mapQuery(name) {
+    if (name === DIMENSION_COUNTRY) {
+      return 'country';
     }
 
-    mapHeader(name) {
-        if (name == 'application name') {
-            return DIMENSION_APPLICATION;
-        }
-        if (name == 'country') {
-            return DIMENSION_COUNTRY;
-        }
-        if (name == 'placement name') {
-            return DIMENSION_PLACEMENT;
-        }
-        return name;
+    return name;
+  }
+
+  static mapHeader(name) {
+    if (name === 'application name') {
+      return DIMENSION_APPLICATION;
     }
-
-    formatUrl(dimensions, metrics, since, until) {
-        var format = [
-            `https://report.api.vungle.com/ext/pub/reports/performance`,
-            `?start=${ee.formatDate(since)}`,
-            `&end=${ee.formatDate(until)}`,
-            `&aggregates=${metrics.join(',')}`
-        ].join('');
-
-        if (dimensions.length > 0) {
-            var url = `${format}&dimensions=${dimensions.join(',')}`;
-        }
-        return url;
+    if (name === 'country') {
+      return DIMENSION_COUNTRY;
     }
-
-    downloadData(apiKey, url) {
-        var options = {
-            headers: {
-                Authorization: (`Bearer ${apiKey}`),
-                Accept: 'application/json',
-                'Vungle-Version': '1'
-            }
-        };
-
-        var result = ee.sendHttpGET(url, options).then(res => {
-            return res.json();
-        }).then(json => {
-            return json;
-        });
-
-        return result;
+    if (name === 'placement name') {
+      return DIMENSION_PLACEMENT;
     }
+    return name;
+  }
 
-    getSessionId() {
-        return _sessionId;
+  static formatUrl(dimensions, metrics, since, until) {
+    let url;
+    const format = [
+      'https://report.api.vungle.com/ext/pub/reports/performance',
+      `?start=${EE.formatDate(since)}`,
+      `&end=${EE.formatDate(until)}`,
+      `&aggregates=${metrics.join(',')}`,
+    ].join('');
+
+    if (dimensions.length > 0) {
+      url = `${format}&dimensions=${dimensions.join(',')}`;
     }
+    return url;
+  }
 
-    buildKey(apiKey, dimensions, metrics, since, until) {
-        var params = [];
-        params.push(apiKey);
-        params.extend(dimensions);
-        params.extend(metrics);
-        params.push(ee.formatDate(since));
-        params.push(ee.formatDate(until));
-        return params.join('|');
-    }
+  static async downloadData(apiKey, url) {
+    const options = {
+      headers: {
+        Authorization: (`Bearer ${apiKey}`),
+        Accept: 'application/json',
+        'Vungle-Version': '1',
+      },
+    };
 
-    requestHttp(apiKey, dimensions, metrics, since, until, useCache) {
-        var url = this.formatUrl(dimensions.map(this.mapQuery), metrics.map(this.mapQuery), since, until);
-        return new Promise((resolve, reject) => {
-            // var key = ee.hash(this.buildKey(apiKey, dimensions, metrics, since, until));
-            this.retrieveData(`key`, apiKey, url).then((data) => {
-                var parsedData = this.parseData(data);
-                resolve(parsedData);
-            });
-        });
-    }
+    const response = await EE.sendHttpGET(url, options);
+    const result = await response.json();
+    return result;
+  }
 
-    mapHeader(name) {
-        if (name == 'application name') {
-            return DIMENSION_APPLICATION;
-        }
-        if (name == 'country') {
-            return DIMENSION_COUNTRY;
-        }
-        if (name == 'placement name') {
-            return DIMENSION_PLACEMENT;
-        }
-        return name;
-    }
+  static buildKey(apiKey, dimensions, metrics, since, until) {
+    const params = [
+      apiKey,
+      ...dimensions,
+      ...metrics,
+      EE.formatDate(since),
+      EE.formatDate(until),
+    ];
+    return params.join('|');
+  }
 
-    retrieveData(key, apiKey, url) {
-        var data = undefined;
-        lock.acquire(key, (done) => {
-            data = this.downloadData(apiKey, url).then(result => {
-                done();
-                return result;
-            }).catch((error) => {
-                console.log("Error " + error);
-                done();
-            });
-        }, (err, ret) => {})
-        return data;
-    }
+  static async requestHttp(apiKey, dimensions, metrics, since, until, useCache) {
+    const url = this.formatUrl(
+      dimensions.map(this.mapQuery),
+      metrics.map(this.mapQuery),
+      since,
+      until,
+    );
+    const key = EE.hash(this.buildKey(apiKey, dimensions, metrics));
+    const retrieveData = await this.retrieveData(key, apiKey, url, useCache);
+    const parseData = this.parseData(retrieveData);
+    return parseData;
+  }
 
-    parseData(data) {
-        var rows = [];
-        data.forEach(item => {
-            var dict = {};
-            Object.keys(item).forEach(key => {
-                var header = this.mapHeader(key);
-                var value = item[key];
-                if (header == DIMENSION_DATE) {
-                    value = ee.parseDate(value);
-                }
-                dict[header] = value;
-            });
-            rows.push(dict);
-        });
-        return rows;
-    }
-}
-
-const server = http.createServer((req, res) => {
-    res.statusCode = 200;
-    res.setHeader('Content-type', 'text/plan');
-    res.end('Yay Me\n');
-});
-
-server.listen(port, hostName, () => {
-    console.log(`Server running at http:// ${hostName}:${port}/`);
-});
-
-function __testVungle() {
-    const dimensions = ["application", "date"];
-    const VUNGLE_KEY = config.CONFIG_VUNGLE_API_KEY;
-    const metrics = ["revenue"]
-    const since = `2019-02-17`;
-    const until = `2019-03-18`;
-    var vungle = new Vungle();
-    var data = vungle.requestHttp(VUNGLE_KEY, dimensions, metrics, since, until, true);
-    data.then((data) => {
-        console.log(data);
-    }).catch(error => {
-        console.log("error " + error);
+  static async retrieveData(key, apiKey, url, useCache) {
+    let data;
+    const lock = new AsyncLock({
+      timeout: LOCK_DURATION,
     });
+    const result = await lock.acquire('key', async () => {
+      const cache = EE.cache();
+      const value = useCache ? cache.get(key) : null;
+      if (value != null) {
+        const decompressed = await EE.decompress(value);
+        data = JSON.parse(decompressed);
+      } else {
+        data = await this.downloadData(apiKey, url);
+        const compressed = await EE.compress(JSON.stringify(data));
+        cache.put(key, compressed, CACHE_DURATION);
+      }
+      return data;
+    });
+    return result;
+  }
+
+  static parseData(data) {
+    const rows = [];
+    data.forEach((item) => {
+      const dict = {};
+      Object.keys(item).forEach((key) => {
+        const header = this.mapHeader(key);
+        let value = item[key];
+        if (header === DIMENSION_DATE) {
+          value = EE.parseDate(value);
+        }
+        dict[header] = value;
+      });
+      rows.push(dict);
+    });
+    return rows;
+  }
 }
 
-__testVungle();
 module.exports = Vungle;

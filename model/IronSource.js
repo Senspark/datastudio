@@ -1,136 +1,131 @@
-const EE = require('../EE');
-const ee = new EE();
-
-var LOCK_DURATION = 60 * 1000;
 const AsyncLock = require('async-lock');
-var lock = new AsyncLock({
-    timeout: LOCK_DURATION
-});
-var DIMENSION_DATE = 'date';
-var DIMENSION_APP = 'app';
-var DIMENSION_COUNTRY = 'country_iso_code';
-var DIMENSION_AD_SOURCE = 'adSource';
+const EE = require('../EE');
 
-var _sessionId = EE.getSessionId();
+const LOCK_DURATION = 60 * 1000;
+const CACHE_DURATION = 6 * 60 * 60;
+
+const DIMENSION_DATE = 'date';
+const DIMENSION_APP = 'app';
+const DIMENSION_COUNTRY = 'country_iso_code';
+const DIMENSION_AD_SOURCE = 'adSource';
 
 class IronSource {
-    getSessionId() {
-        return _sessionId;
+  static mapQuery(name) {
+    if (name === DIMENSION_COUNTRY) {
+      return 'country';
     }
+    return name;
+  }
 
-    mapQuery(name) {
-        if (name == DIMENSION_COUNTRY) {
-            return 'country';
-        }
-        return name;
+  static mapHeader(name) {
+    if (name === 'countryCode') {
+      return DIMENSION_COUNTRY;
     }
-
-    mapHeader(name) {
-        if (name == 'countryCode') {
-            return DIMENSION_COUNTRY;
-        }
-        if (name == 'appName') {
-            return DIMENSION_APP;
-        }
-        if (name == 'providerName') {
-            return DIMENSION_AD_SOURCE;
-        }
-        return name;
+    if (name === 'appName') {
+      return DIMENSION_APP;
     }
-
-    formatUrl(dimensions, metrics, since, until) {
-        var url = [
-            `https://platform.ironsrc.com/partners/publisher/mediation/applications/v3/stats`,
-            `?startDate=${ee.formatDate(since)}`,
-            `&endDate=${ee.formatDate(until)}`,
-            `&breakdowns=${dimensions.join(',')}`,
-            `&metrics=${metrics.join(',')}`
-        ].join('')
-        return url;
+    if (name === 'providerName') {
+      return DIMENSION_AD_SOURCE;
     }
+    return name;
+  }
 
-    downloadData(username, secretKey, url) {
-        var encoded = window.btoa(`${username}:${secretKey}`);
-        var options = {
-            headers: {
-                Authorization: Utilities.formatString('Basic %s', encoded),
-            },
-        };
-        /*
-        var code = result.getResponseCode();
-        if (code == 429) {
-          // Exceeded request limit.
-          return null;
-        }
-        */
-        var result = ee.sendHttpGET(url, options).then(res => {
-            return res.json();
-        }).then(json => {
-            return json;
+  static formatUrl(dimensions, metrics, since, until) {
+    const url = [
+      'https://platform.ironsrc.com/partners/publisher/mediation/applications/v3/stats',
+      `?startDate=${EE.formatDate(since)}`,
+      `&endDate=${EE.formatDate(until)}`,
+      `&breakdowns=${dimensions.join(',')}`,
+      `&metrics=${metrics.join(',')}`,
+    ].join('');
+    return url;
+  }
+
+  static async downloadData(username, secretKey, url) {
+    const encoded = Buffer.from(`${username}:${secretKey}`).toString('base64');
+    const options = {
+      headers: {
+        Authorization: `Basic ${encoded}`,
+      },
+    };
+    const response = await EE.sendHttpGET(url, options);
+    const result = await response.text();
+    const data = JSON.parse(result);
+    return data;
+  }
+
+  static async retrieveData(key, username, secretKey, url, useCache) {
+    let data;
+    const lock = new AsyncLock({ timeout: LOCK_DURATION });
+    const result = await lock.acquire('key', async () => {
+      const cache = EE.cache();
+      const value = useCache ? cache.get(key) : null;
+      if (value !== null) {
+        data = JSON.parse(EE.decompress(value));
+      } else {
+        data = await this.downloadData(username, secretKey, url);
+        const compressed = await EE.compress(JSON.stringify(data));
+        cache.put(key, compressed, CACHE_DURATION);
+      }
+      return data;
+    });
+    return result;
+  }
+
+  static parseData(data) {
+    const mapHeader = this.mapHeader;
+    const parsedData = [];
+    if (data) {
+      // May return empty data.
+
+      data.forEach((item) => {
+        item.data.forEach((subItem) => {
+          const parsedItem = {};
+          Object.keys(item).forEach((key) => {
+            if (key !== 'data') {
+              const header = mapHeader(key);
+              let value = item[key];
+              if (header === DIMENSION_DATE) {
+                value = EE.parseDate(value);
+              }
+              parsedItem[header] = value;
+            }
+          });
+          Object.keys(subItem).forEach((key) => {
+            const header = mapHeader(key);
+            parsedItem[header] = subItem[key];
+          });
+          parsedData.push(parsedItem);
         });
-        return result;
+      });
     }
+    return parsedData;
+  }
 
-    retrieveData(key, username, secretKey, url, useCache) {
-        var data = undefined;
-        var result = lock.acquire(key, (done) => {
-            data = downloadData(username, secretKey, url);
-            done();
-        }, (err, ret) => {
-            return JSON.parse(data);
-        })
-        return result;
-    }
+  static buildKey(username, secretKey, dimensions, metrics, since, until) {
+    const params = [
+      username,
+      secretKey,
+      ...dimensions,
+      ...metrics,
+      EE.formatDate(since),
+      EE.formatDate(until),
+    ];
+    return params.join('|');
+  }
 
-    parseData(data, since, until) {
-        var parsedData = [];
-        if (data) {
-            // May return empty data.    
-            data.forEach(function (item) {
-                item.data.forEach(function (subItem) {
-                    var parsedItem = {}
-                    Object.keys(item).forEach(function (key) {
-                        if (key != 'data') {
-                            var header = mapHeader(key);
-                            var value = item[key];
-                            if (header == DIMENSION_DATE) {
-                                value = ee.parseDate(value);
-                            }
-                            parsedItem[header] = value;
-                        }
-                    });
-                    Object.keys(subItem).forEach(function (key) {
-                        var header = mapHeader(key);
-                        parsedItem[header] = subItem[key];
-                    });
-                    parsedData.push(parsedItem);
-                });
-            });
-        }
-        return parsedData;
-    }
-
-    buildKey(username, secretKey, dimensions, metrics, since, until) {
-        var params = [];
-        params.push(username);
-        params.push(secretKey);
-        params.extend(dimensions);
-        params.extend(metrics);
-        params.push(EE.formatDate(since));
-        params.push(EE.formatDate(until));
-        return params.join('|');
-    }
-
-    requestHttp(username, secretKey, dimensions, metrics, since, until, useCache) {
-        var url = this.formatUrl(dimensions.map(mapQuery), metrics.map(mapQuery), since, until);
-
-        var key = EE.hash(buildKey(username, secretKey, dimensions, metrics, since, until));
-        var data = this.retrieveData(key, username, secretKey, url, useCache);
-        // console.log(Utilities.formatString('%s: data = %s', getSessionId(), JSON.stringify(data)));
-
-        var parsedData = this.parseData(data);
-        return parsedData;
-    }
+  static async requestHttp(username, secretKey, dimensions, metrics, since, until, useCache) {
+    const url = this.formatUrl(
+      dimensions.map(this.mapQuery),
+      metrics.map(this.mapQuery),
+      since,
+      until,
+    );
+    const key = EE.hash(this.buildKey(username, secretKey, dimensions, metrics, since, until));
+    const data = await this.retrieveData(key, username, secretKey, url, useCache);
+    const parsedData = this.parseData(data);
+    return parsedData;
+  }
 }
 
 module.exports = IronSource;
