@@ -1,7 +1,10 @@
 const sleep = require('sleep');
+const fs = require('fs');
 const AsyncLock = require('async-lock');
+
 const EE = require('../EE');
 
+const filename = 'FACEBOOKADS';
 const LOCK_DURATION = 60 * 1000;
 const CACHE_DURATION = 6 * 60 * 60;
 
@@ -241,8 +244,9 @@ class FacebookAd {
       const cache = EE.cache();
       const value = useCache ? cache.get(key) : null;
       if (value !== null) {
-        const data = EE.decompress(value);
-        parsedData = JSON.parse(data);
+        const readFile = fs.readFileSync(`../cache/${filename}.txt`, 'utf8');
+        const decompressed = await EE.decompress(readFile);
+        parsedData = JSON.parse(decompressed);
       } else {
         const queryIds = await this.retrieveQueryIds(
           appIds,
@@ -258,7 +262,10 @@ class FacebookAd {
         parsedData = this.parseData(data, useDate, metrics);
         const raw = JSON.stringify(parsedData);
         const compressed = await EE.compress(raw);
-        cache.put(key, compressed, CACHE_DURATION);
+        fs.writeFile(`../cache/${filename}.txt`, compressed, (err) => {
+          if (err) throw err;
+        });
+        cache.put(key, filename, CACHE_DURATION);
       }
       return parsedData;
     });
