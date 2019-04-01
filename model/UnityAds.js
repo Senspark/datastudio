@@ -1,5 +1,8 @@
 const csv = require('csvtojson');
+const fs = require('fs');
 const AsyncLock = require('async-lock');
+
+const filename = 'UNITYADS';
 const EE = require('../EE');
 
 const LOCK_DURATION = 60 * 1000;
@@ -77,12 +80,16 @@ class UnityAds {
       const cache = EE.cache();
       const value = useCache ? cache.get(key) : null;
       if (value !== null) {
-        const decompressed = await EE.decompress(value);
+        const readFile = fs.readFileSync(`../cache/${filename}.txt`, 'utf8');
+        const decompressed = await EE.decompress(readFile);
         data = JSON.parse(decompressed);
       } else {
         data = await this.downloadData(url);
         const compressed = await EE.compress(JSON.stringify(data));
-        cache.put(key, compressed, CACHE_DURATION);
+        fs.writeFile(`../cache/${filename}.txt`, compressed, (err) => {
+          if (err) throw err;
+        });
+        cache.put(key, filename, CACHE_DURATION);
       }
       return data;
     });

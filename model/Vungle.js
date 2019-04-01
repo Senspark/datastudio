@@ -1,6 +1,9 @@
 const AsyncLock = require('async-lock');
+const fs = require('fs');
+
 const EE = require('../EE');
 
+const filename = 'VUNGLE';
 const CACHE_DURATION = 6 * 60 * 60;
 const LOCK_DURATION = 60 * 1000;
 
@@ -92,13 +95,17 @@ class Vungle {
     const result = await lock.acquire('key', async () => {
       const cache = EE.cache();
       const value = useCache ? cache.get(key) : null;
-      if (value != null) {
-        const decompressed = await EE.decompress(value);
+      if (value !== null) {
+        const readFile = fs.readFileSync(`../cache/${filename}.txt`, 'utf8');
+        const decompressed = await EE.decompress(readFile);
         data = JSON.parse(decompressed);
       } else {
         data = await this.downloadData(apiKey, url);
         const compressed = await EE.compress(JSON.stringify(data));
-        cache.put(key, compressed, CACHE_DURATION);
+        fs.writeFile(`../cache/${filename}.txt`, compressed, (err) => {
+          if (err) throw err;
+        });
+        cache.put(key, filename, CACHE_DURATION);
       }
       return data;
     });
