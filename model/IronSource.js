@@ -1,8 +1,10 @@
 const AsyncLock = require('async-lock');
+const fs = require('fs');
 const EE = require('../EE');
 
 const LOCK_DURATION = 60 * 1000;
 const CACHE_DURATION = 6 * 60 * 60;
+const filename = 'IRONSOURCE';
 
 const DIMENSION_DATE = 'date';
 const DIMENSION_APP = 'app';
@@ -61,11 +63,16 @@ class IronSource {
       const cache = EE.cache();
       const value = useCache ? cache.get(key) : null;
       if (value !== null) {
-        data = JSON.parse(EE.decompress(value));
+        const readFile = fs.readFileSync(`../cache/${filename}.txt`, 'utf8');
+        const decompressed = await EE.decompress(readFile);
+        data = JSON.parse(decompressed);
       } else {
         data = await this.downloadData(username, secretKey, url);
         const compressed = await EE.compress(JSON.stringify(data));
-        cache.put(key, compressed, CACHE_DURATION);
+        fs.writeFile(`../cache/${filename}.txt`, compressed, (err) => {
+          if (err) throw err;
+        });
+        cache.put(key, 'IRONSOURE', CACHE_DURATION);
       }
       return data;
     });
