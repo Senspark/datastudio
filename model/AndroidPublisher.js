@@ -1,8 +1,10 @@
 const fetch = require('node-fetch');
+const fs = require('fs');
 const AsyncLock = require('async-lock');
 const AdmZip = require('adm-zip');
 const EE = require('../EE');
 
+const filename = 'ANDROIDPUBLISHER';
 const LOCK_DURATION = 60 * 1000;
 const CACHE_DURATION = 6 * 60 * 60;
 
@@ -156,7 +158,6 @@ class AndroidPublisher {
   static async retrieveData(url, token) {
     const options = this.createOption(token);
     const response = await EE.sendHttpGET(url, options);
-    // console.log(response.error);
     const result = await response.json();
     return result;
   }
@@ -171,9 +172,12 @@ class AndroidPublisher {
       const key = EE.hash(buildKey);
       const cache = EE.cache();
       const value = useCache ? cache.get(key) : null;
-      if (value != null) {
-        const data = await EE.decompress(value);
-        parsedData = JSON.parse(data);
+      if (value !== null) {
+        // const data = await EE.decompress(value);
+        // parsedData = JSON.parse(data);
+        const readFile = fs.readFileSync(`../cache/${filename}.txt`, 'utf8');
+        const decompressed = await EE.decompress(readFile);
+        parsedData = JSON.parse(decompressed);
       } else {
         const url = this.formatObjectsListUrl(bucketId);
         const data = await this.retrieveData(url, token);
@@ -181,7 +185,10 @@ class AndroidPublisher {
         parsedData = await this.parseData(token, data, headers, since, until);
         const raw = JSON.stringify(parsedData);
         const compress = await EE.compress(raw);
-        cache.put(key, compress, CACHE_DURATION);
+        fs.writeFile(`../cache/${filename}.txt`, compress, (err) => {
+          if (err) throw err;
+        });
+        cache.put(key, filename, CACHE_DURATION);
       }
       return parsedData;
     });
