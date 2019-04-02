@@ -534,6 +534,7 @@ class EE {
   }
 
   static sendHttpGET(url, option) {
+    console.log(url);
     const options = option;
     options.method = 'GET';
     return this.sendHttp(url, options);

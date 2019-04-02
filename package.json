@@ -12,15 +12,26 @@
 	"author": "linhtlq@gmail.com",
 	"license": "ISC",
 	"dependencies": {
+		"adm-zip": "^0.4.13",
 		"async-lock": "^1.1.4",
 		"blob": "0.0.5",
 		"blob-to-buffer": "^1.2.8",
 		"csvtojson": "^2.0.8",
-		"eslint": "^5.15.2",
+		"decompress-response": "^4.1.0",
+		"express": "^4.16.4",
 		"lzutf8": "^0.5.5",
+		"memory-cache": "^0.2.0",
 		"node-fetch": "^2.3.0",
+		"query-string": "^6.4.0",
+		"request": "^2.88.0",
 		"requirejs": "^2.3.6",
-		"sleep": "^6.0.0"
+		"sleep": "^6.0.0",
+		"unzip-response": "^3.0.0",
+		"zlib": "^1.0.5"
 	},
-	"devDependencies": {}
+	"devDependencies": {
+		"eslint": "^5.15.3",
+		"eslint-config-airbnb-base": "^13.1.0",
+		"eslint-plugin-import": "^2.16.0"
+	}
 }

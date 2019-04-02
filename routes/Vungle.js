@@ -20,9 +20,7 @@ router.get('/', (req, res) => {
         data: 'cannot get data',
       });
     } else {
-      res.status(200).json({
-        response: result,
-      });
+      res.status(200).send(result);
     }
   });
 });

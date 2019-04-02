@@ -175,7 +175,7 @@ class AndroidPublisher {
       if (value !== null) {
         // const data = await EE.decompress(value);
         // parsedData = JSON.parse(data);
-        const readFile = fs.readFileSync(`../cache/${filename}.txt`, 'utf8');
+        const readFile = fs.readFileSync(`./cache/${filename}.txt`, 'utf8');
         const decompressed = await EE.decompress(readFile);
         parsedData = JSON.parse(decompressed);
       } else {
@@ -185,7 +185,7 @@ class AndroidPublisher {
         parsedData = await this.parseData(token, data, headers, since, until);
         const raw = JSON.stringify(parsedData);
         const compress = await EE.compress(raw);
-        fs.writeFile(`../cache/${filename}.txt`, compress, (err) => {
+        fs.writeFile(`./cache/${filename}.txt`, compress, (err) => {
           if (err) throw err;
         });
         cache.put(key, filename, CACHE_DURATION);

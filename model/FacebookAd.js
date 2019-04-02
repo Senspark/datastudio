@@ -244,7 +244,7 @@ class FacebookAd {
       const cache = EE.cache();
       const value = useCache ? cache.get(key) : null;
       if (value !== null) {
-        const readFile = fs.readFileSync(`../cache/${filename}.txt`, 'utf8');
+        const readFile = fs.readFileSync(`./cache/${filename}.txt`, 'utf8');
         const decompressed = await EE.decompress(readFile);
         parsedData = JSON.parse(decompressed);
       } else {
@@ -262,7 +262,7 @@ class FacebookAd {
         parsedData = this.parseData(data, useDate, metrics);
         const raw = JSON.stringify(parsedData);
         const compressed = await EE.compress(raw);
-        fs.writeFile(`../cache/${filename}.txt`, compressed, (err) => {
+        fs.writeFile(`./cache/${filename}.txt`, compressed, (err) => {
           if (err) throw err;
         });
         cache.put(key, filename, CACHE_DURATION);

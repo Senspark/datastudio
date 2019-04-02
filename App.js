@@ -12,5 +12,9 @@ app.use('/ironsource', ironSourceRoutes);
 app.use('/unityads', unityAdsRoutes);
 app.use('/facebookads', facebookAdsRoutes);
 app.use('/androidpublisher', androidPublisherRoutes);
-
+app.use('/test', (req, res) => {
+  res.status(200).json({
+    message: 'It works',
+  });
+});
 module.exports = app;

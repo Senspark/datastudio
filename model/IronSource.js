@@ -63,13 +63,13 @@ class IronSource {
       const cache = EE.cache();
       const value = useCache ? cache.get(key) : null;
       if (value !== null) {
-        const readFile = fs.readFileSync(`../cache/${filename}.txt`, 'utf8');
+        const readFile = fs.readFileSync(`./cache/${filename}.txt`, 'utf8');
         const decompressed = await EE.decompress(readFile);
         data = JSON.parse(decompressed);
       } else {
         data = await this.downloadData(username, secretKey, url);
         const compressed = await EE.compress(JSON.stringify(data));
-        fs.writeFile(`../cache/${filename}.txt`, compressed, (err) => {
+        fs.writeFile(`./cache/${filename}.txt`, compressed, (err) => {
           if (err) throw err;
         });
         cache.put(key, 'IRONSOURE', CACHE_DURATION);
